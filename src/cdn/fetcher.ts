@@ -1,7 +1,8 @@
 /**
- * Fetches a single source JSON file from the CDN. Pure GET — no caching,
- * no ETag negotiation in v0.1; that lands in v0.2. Errors propagate so the
- * caller can decide between "fail the whole load" and "skip this source".
+ * Fetches a single source JSON file from the CDN. Honours `If-None-Match` /
+ * `If-Modified-Since` so the loader can revalidate without paying the full
+ * download on unchanged sources. Errors propagate so the caller can decide
+ * between "fail the whole load" and "skip this source".
  *
  * Uses global `fetch` (Node 22+) rather than `undici.request` because the
  * CDN serves gzip-compressed responses and `fetch` decompresses them
@@ -12,13 +13,21 @@ export interface FetchSourceOptions {
   version: string;
   source: string;
   timeoutMs: number;
+  /** Sent as `If-None-Match`; on 304 the caller reuses the cached body. */
+  ifNoneMatch?: string | null;
+  /** Sent as `If-Modified-Since`; on 304 the caller reuses the cached body. */
+  ifModifiedSince?: string | null;
 }
 
 export interface FetchedSource {
   url: string;
   version: string;
+  /** Empty buffer when `notModified` is true. */
   body: Buffer;
   fetchedAt: Date;
+  etag: string | null;
+  lastModified: string | null;
+  notModified: boolean;
 }
 
 export async function fetchSource(opts: FetchSourceOptions): Promise<FetchedSource> {
@@ -26,7 +35,21 @@ export async function fetchSource(opts: FetchSourceOptions): Promise<FetchedSour
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), opts.timeoutMs);
   try {
-    const res = await fetch(url, { method: 'GET', signal: ac.signal });
+    const headers: Record<string, string> = {};
+    if (opts.ifNoneMatch) headers['If-None-Match'] = opts.ifNoneMatch;
+    if (opts.ifModifiedSince) headers['If-Modified-Since'] = opts.ifModifiedSince;
+    const res = await fetch(url, { method: 'GET', signal: ac.signal, headers });
+    if (res.status === 304) {
+      return {
+        url,
+        version: opts.version,
+        body: Buffer.alloc(0),
+        fetchedAt: new Date(),
+        etag: res.headers.get('etag'),
+        lastModified: res.headers.get('last-modified'),
+        notModified: true,
+      };
+    }
     if (res.status === 404) {
       throw new SourceNotAvailableError(opts.source, opts.version, url);
     }
@@ -34,7 +57,15 @@ export async function fetchSource(opts: FetchSourceOptions): Promise<FetchedSour
       throw new Error(`CDN ${opts.source}.json returned HTTP ${res.status} from ${url}`);
     }
     const buf = Buffer.from(await res.arrayBuffer());
-    return { url, version: opts.version, body: buf, fetchedAt: new Date() };
+    return {
+      url,
+      version: opts.version,
+      body: buf,
+      fetchedAt: new Date(),
+      etag: res.headers.get('etag'),
+      lastModified: res.headers.get('last-modified'),
+      notModified: false,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -54,7 +85,7 @@ export class SourceNotAvailableError extends Error {
     public readonly version: string,
     public readonly url: string,
   ) {
-    super(`Source '${source}' not available at version ${version} (${url})`);
+    super(`source '${source}' is not available in version ${version} (${url})`);
     this.name = 'SourceNotAvailableError';
   }
 }

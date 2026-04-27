@@ -42,7 +42,7 @@ async function rpc(messages: object[]): Promise<JsonRpcResponse[]> {
 }
 
 describe('server stdio handshake', () => {
-  it('completes initialize and lists the v0.1 tools', async () => {
+  it('completes initialize and lists the full tool surface', async () => {
     const out = await rpc([
       { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
       { jsonrpc: '2.0', method: 'notifications/initialized' },
@@ -54,6 +54,23 @@ describe('server stdio handshake', () => {
     const list = out.find((r) => r.id === 2);
     assert.ok(list, 'tools/list response missing');
     const tools = (list!.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ['cdn_version', 'find_items', 'get_source', 'list_sources', 'resolve_strings']);
+    assert.deepEqual(tools, [
+      'abilities_for_skill',
+      'cdn_version',
+      'find_abilities',
+      'find_effects',
+      'find_items',
+      'find_npcs',
+      'find_quests',
+      'find_recipes',
+      'get_source',
+      'item_sources',
+      'list_keys',
+      'list_sources',
+      'quests_in_area',
+      'recipes_for_item',
+      'refresh',
+      'resolve_strings',
+    ]);
   });
 });

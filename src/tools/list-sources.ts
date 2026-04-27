@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { allSources, v01Sources } from '../sources/registry.js';
+import { allSources } from '../sources/registry.js';
 import type { SourceManager } from '../sources/manager.js';
 
 export const ListSourcesInput = z.object({
@@ -23,11 +23,11 @@ export async function runListSources(args: ListSourcesArgs, manager: SourceManag
       return {
         name,
         loaded: l !== undefined,
-        availableInV01: (v01Sources as readonly string[]).includes(name),
         ...(l
           ? {
               entryCount: Object.keys(l.data).length,
               fetchedAt: l.fetchedAt.toISOString(),
+              etag: l.etag,
               url: l.url,
             }
           : {}),

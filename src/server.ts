@@ -13,17 +13,28 @@ import { CdnVersionInput, runCdnVersion } from './tools/cdn-version.js';
 import { ListSourcesInput, runListSources } from './tools/list-sources.js';
 import { GetSourceInput, runGetSource } from './tools/get-source.js';
 import { FindItemsInput, runFindItems } from './tools/find-items.js';
+import { FindRecipesInput, runFindRecipes } from './tools/find-recipes.js';
+import { FindNpcsInput, runFindNpcs } from './tools/find-npcs.js';
+import { FindEffectsInput, runFindEffects } from './tools/find-effects.js';
+import { FindQuestsInput, runFindQuests } from './tools/find-quests.js';
+import { FindAbilitiesInput, runFindAbilities } from './tools/find-abilities.js';
+import { ListKeysInput, runListKeys } from './tools/list-keys.js';
 import { ResolveStringsInput, runResolveStrings } from './tools/resolve-strings.js';
+import { ItemSourcesInput, runItemSources } from './tools/item-sources.js';
+import { RecipesForItemInput, runRecipesForItem } from './tools/recipes-for-item.js';
+import { AbilitiesForSkillInput, runAbilitiesForSkill } from './tools/abilities-for-skill.js';
+import { QuestsInAreaInput, runQuestsInArea } from './tools/quests-in-area.js';
+import { RefreshInput, runRefresh } from './tools/refresh.js';
 
 const SERVER_NAME = 'pg-data';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.3.0';
 
 const TOOLS = [
   {
     name: 'cdn_version',
     description:
-      'Returns the CDN version this server is currently using (auto-detected from cdn.projectgorgon.com, ' +
-      'or the configured fallback).',
+      'Returns the CDN version this server is currently using. Pass include_loaded=true to also ' +
+      'list every loaded source with its fetchedAt + etag.',
     inputSchema: zodToJsonSchema(CdnVersionInput),
   },
   {
@@ -37,16 +48,84 @@ const TOOLS = [
     name: 'get_source',
     description:
       'Fetches the raw JSON entry for one (source, key) tuple — e.g. (items, item_5538). Omit the key ' +
-      "to return aggregate stats only. v0.1 supports items, recipes, npcs, strings_all.",
+      'to return aggregate stats only. Supports every source listed by list_sources.',
     inputSchema: zodToJsonSchema(GetSourceInput),
+  },
+  {
+    name: 'list_keys',
+    description:
+      'Paged enumeration of every key in one source, with optional prefix filter. The discovery ' +
+      'primitive for join tools — cheaper than dumping a whole source via get_source.',
+    inputSchema: zodToJsonSchema(ListKeysInput),
   },
   {
     name: 'find_items',
     description:
       'Filter items by InternalName, IconId, EquipSlot, Keyword, EffectDescs substring, SkillReqs, ' +
-      'or Value range. Returns a paginated list of full raw item records (or projected fields). ' +
-      'Replaces grepping items.json directly.',
+      'or Value range. Returns a paginated list of full raw item records (or projected fields).',
     inputSchema: zodToJsonSchema(FindItemsInput),
+  },
+  {
+    name: 'find_recipes',
+    description:
+      'Filter recipes by Skill, level range, result item internal_name, ingredient item internal_name, ' +
+      'or substring across the recipe result EffectDescs.',
+    inputSchema: zodToJsonSchema(FindRecipesInput),
+  },
+  {
+    name: 'find_npcs',
+    description:
+      'Filter NPCs by area, gift preference (likes/loves/dislikes/hates a keyword), or available ' +
+      'service substring.',
+    inputSchema: zodToJsonSchema(FindNpcsInput),
+  },
+  {
+    name: 'find_effects',
+    description:
+      'Filter effects by token (substring on Name + Desc, multi-token AND-intersect) or referenced ' +
+      'attribute name in the Mods map. The headline tool — replaces grepping multi-MB effects.json.',
+    inputSchema: zodToJsonSchema(FindEffectsInput),
+  },
+  {
+    name: 'find_quests',
+    description:
+      'Filter quests by FavorNpc, Area, requires_skill, reward_skill, objective target substring, ' +
+      'or repeatable flag.',
+    inputSchema: zodToJsonSchema(FindQuestsInput),
+  },
+  {
+    name: 'find_abilities',
+    description:
+      'Filter abilities by Skill, level range, or Keyword. Use abilities_for_skill if you want a ' +
+      'skill-scoped ability list joined with the skill record + advancement table.',
+    inputSchema: zodToJsonSchema(FindAbilitiesInput),
+  },
+  {
+    name: 'item_sources',
+    description:
+      'Resolve where an item drops or is sold from. Joins items + sources_items and augments each ' +
+      'source with NPC display names + recipe / quest internal names. Keeps every Monster/Source/Interactor ' +
+      "context (the .NET app drops two of three).",
+    inputSchema: zodToJsonSchema(ItemSourcesInput),
+  },
+  {
+    name: 'recipes_for_item',
+    description:
+      'Every recipe that produces or consumes the given item. role=result | ingredient | any (default any).',
+    inputSchema: zodToJsonSchema(RecipesForItemInput),
+  },
+  {
+    name: 'abilities_for_skill',
+    description:
+      'Joins abilities + skills + advancement tables for one skill, filtered by level range. The ' +
+      '"what unlocks at level X in skill Y" query.',
+    inputSchema: zodToJsonSchema(AbilitiesForSkillInput),
+  },
+  {
+    name: 'quests_in_area',
+    description:
+      'Quests in the named area, optionally filtered by repeatable flag and required skill.',
+    inputSchema: zodToJsonSchema(QuestsInAreaInput),
   },
   {
     name: 'resolve_strings',
@@ -54,6 +133,13 @@ const TOOLS = [
       "Bulk lookup over the game's flat string table (strings_all.json). Pass an array of keys like " +
       '["item_5538_Name", "effect_25538_Name"]; returns each key with its display string (or null if missing).',
     inputSchema: zodToJsonSchema(ResolveStringsInput),
+  },
+  {
+    name: 'refresh',
+    description:
+      'Force re-fetch one source (or all if omitted). Returns a before/after snapshot + a `changed` ' +
+      'flag derived from etag + fetchedAt comparison.',
+    inputSchema: zodToJsonSchema(RefreshInput),
   },
 ] as const;
 
@@ -73,28 +159,67 @@ async function main(): Promise<void> {
       switch (name) {
         case 'cdn_version': {
           const args = CdnVersionInput.parse(rawArgs ?? {});
-          const result = await runCdnVersion(args, manager);
-          return contentJson(result);
+          return contentJson(await runCdnVersion(args, manager));
         }
         case 'list_sources': {
           const args = ListSourcesInput.parse(rawArgs ?? {});
-          const result = await runListSources(args, manager);
-          return contentJson(result);
+          return contentJson(await runListSources(args, manager));
         }
         case 'get_source': {
           const args = GetSourceInput.parse(rawArgs ?? {});
-          const result = await runGetSource(args, manager);
-          return contentJson(result);
+          return contentJson(await runGetSource(args, manager));
+        }
+        case 'list_keys': {
+          const args = ListKeysInput.parse(rawArgs ?? {});
+          return contentJson(await runListKeys(args, manager));
         }
         case 'find_items': {
           const args = FindItemsInput.parse(rawArgs ?? {});
-          const result = await runFindItems(args, manager);
-          return contentJson(result);
+          return contentJson(await runFindItems(args, manager));
+        }
+        case 'find_recipes': {
+          const args = FindRecipesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindRecipes(args, manager));
+        }
+        case 'find_npcs': {
+          const args = FindNpcsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindNpcs(args, manager));
+        }
+        case 'find_effects': {
+          const args = FindEffectsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindEffects(args, manager));
+        }
+        case 'find_quests': {
+          const args = FindQuestsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindQuests(args, manager));
+        }
+        case 'find_abilities': {
+          const args = FindAbilitiesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAbilities(args, manager));
+        }
+        case 'item_sources': {
+          const args = ItemSourcesInput.parse(rawArgs ?? {});
+          return contentJson(await runItemSources(args, manager));
+        }
+        case 'recipes_for_item': {
+          const args = RecipesForItemInput.parse(rawArgs ?? {});
+          return contentJson(await runRecipesForItem(args, manager));
+        }
+        case 'abilities_for_skill': {
+          const args = AbilitiesForSkillInput.parse(rawArgs ?? {});
+          return contentJson(await runAbilitiesForSkill(args, manager));
+        }
+        case 'quests_in_area': {
+          const args = QuestsInAreaInput.parse(rawArgs ?? {});
+          return contentJson(await runQuestsInArea(args, manager));
         }
         case 'resolve_strings': {
           const args = ResolveStringsInput.parse(rawArgs ?? {});
-          const result = await runResolveStrings(args, manager);
-          return contentJson(result);
+          return contentJson(await runResolveStrings(args, manager));
+        }
+        case 'refresh': {
+          const args = RefreshInput.parse(rawArgs ?? {});
+          return contentJson(await runRefresh(args, manager));
         }
         default:
           return errorResult(`Unknown tool: ${name}`);

@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { isKnownSource, v01Sources, type SourceName } from '../sources/registry.js';
-import { SourceNotAvailableError } from '../cdn/fetcher.js';
+import { isKnownSource, type SourceName } from '../sources/registry.js';
+import { surfaceSourceError } from '../util/source-errors.js';
 import type { SourceManager } from '../sources/manager.js';
-
-const v01Set = new Set<string>(v01Sources);
 
 export const GetSourceInput = z.object({
   source: z.string().min(1),
@@ -19,24 +17,8 @@ export async function runGetSource(args: GetSourceArgs, manager: SourceManager) 
   if (!isKnownSource(args.source)) {
     throw new Error(`Unknown source '${args.source}'. Use list_sources to see what's available.`);
   }
-  if (!v01Set.has(args.source)) {
-    throw new Error(
-      `Source '${args.source}' is registered but not yet enabled in this build. ` +
-        `v0.1 supports: ${[...v01Sources].join(', ')}.`,
-    );
-  }
 
-  let loaded;
-  try {
-    loaded = await manager.load(args.source as SourceName);
-  } catch (err) {
-    if (err instanceof SourceNotAvailableError) {
-      throw new Error(
-        `Source '${args.source}' is not published at version ${err.version}. (${err.url})`,
-      );
-    }
-    throw err;
-  }
+  const loaded = await surfaceSourceError(() => manager.load(args.source as SourceName));
 
   const envelope = {
     source: args.source,

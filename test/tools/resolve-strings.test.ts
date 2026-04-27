@@ -17,6 +17,8 @@ function primeStrings(strings: Record<string, string>): SourceManager {
     source: 'strings_all',
     url: 'http://test/strings_all.json',
     fetchedAt: new Date(0),
+    etag: null,
+    lastModified: null,
     data: strings,
   });
   (manager as unknown as { detectedVersion: string }).detectedVersion = 'v0test';

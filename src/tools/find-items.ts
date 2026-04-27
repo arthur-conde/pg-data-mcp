@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import type { Entry, Hit } from '../sources/indexes.js';
 import type { SourceManager } from '../sources/manager.js';
+import { scanAll, streamHits } from '../util/result-stream.js';
+import { surfaceSourceError } from '../util/source-errors.js';
+import { requireAtLeastOneFilter } from '../util/zod-helpers.js';
 
 export const FindItemsInput = z
   .object({
@@ -25,33 +29,32 @@ export const FindItemsInput = z
     offset: z.number().int().min(0).default(0),
   })
   .refine(
-    (v) =>
-      v.internal_name !== undefined ||
-      v.internal_name_contains !== undefined ||
-      v.name_contains !== undefined ||
-      v.icon_id !== undefined ||
-      v.equip_slot !== undefined ||
-      v.keyword !== undefined ||
-      v.effect_desc_contains !== undefined ||
-      v.skill_prereq !== undefined ||
-      v.value_min !== undefined ||
-      v.value_max !== undefined,
+    requireAtLeastOneFilter(
+      'internal_name',
+      'internal_name_contains',
+      'name_contains',
+      'icon_id',
+      'equip_slot',
+      'keyword',
+      'effect_desc_contains',
+      'skill_prereq',
+      'value_min',
+      'value_max',
+    ),
     { message: 'find_items requires at least one filter field' },
   );
 
 export type FindItemsArgs = z.infer<typeof FindItemsInput>;
 
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-
 export async function runFindItems(args: FindItemsArgs, manager: SourceManager) {
   const t0 = performance.now();
-  const { source, indexes } = await manager.items();
+  const { source, indexes } = await surfaceSourceError(() => manager.items());
 
   // Pick the cheapest index that narrows the candidate set, then scan-filter
   // the rest. For the v0.1 surface, exact internal_name and icon_id and
   // keyword each map to a precomputed bucket; the rest fall through to a
   // full data scan.
-  let candidates: Array<[string, Record<string, unknown>]>;
+  let candidates: Iterable<Hit>;
   if (args.internal_name) {
     const hit = indexes.byInternalName.get(args.internal_name);
     candidates = hit ? [hit] : [];
@@ -62,67 +65,30 @@ export async function runFindItems(args: FindItemsArgs, manager: SourceManager) 
   } else if (args.effect_desc_contains) {
     // Use the token index when a single token is searched; fall through to scan otherwise.
     const tokens = args.effect_desc_contains.toLowerCase().split(/[^a-z0-9_]+/i).filter(Boolean);
-    if (tokens.length === 1) {
-      const hits = indexes.byEffectDescToken.get(tokens[0]!) ?? [];
-      candidates = hits;
-    } else {
-      candidates = scanAll(source.data);
-    }
+    candidates =
+      tokens.length === 1 ? indexes.byEffectDescToken.get(tokens[0]!) ?? [] : scanAll(source.data);
   } else {
     candidates = scanAll(source.data);
   }
 
-  const results: Array<{ key: string; data: Record<string, unknown> }> = [];
-  let matched = 0;
-  let skipped = 0;
-  let truncated = false;
-  let bytesEmitted = 0;
-
-  for (const [key, entry] of candidates) {
-    if (!matchesFilters(entry, args)) continue;
-    matched += 1;
-    if (skipped < args.offset) {
-      skipped += 1;
-      continue;
-    }
-    if (results.length >= args.limit) {
-      truncated = true;
-      continue;
-    }
-    const projected = args.fields ? projectFields(entry, args.fields) : entry;
-    const encoded = JSON.stringify(projected);
-    if (bytesEmitted + encoded.length > MAX_RESPONSE_BYTES) {
-      truncated = true;
-      break;
-    }
-    results.push({ key, data: projected });
-    bytesEmitted += encoded.length + 2;
-  }
+  const stream = streamHits(candidates, (entry) => matchesFilters(entry, args), {
+    limit: args.limit,
+    offset: args.offset,
+    fields: args.fields,
+  });
 
   const elapsedMs = Math.round(performance.now() - t0);
   return {
     summary: {
       version: source.version,
-      matched,
-      returned: results.length,
-      truncated,
+      ...stream.summary,
       elapsedMs,
     },
-    items: results,
+    items: stream.items,
   };
 }
 
-function scanAll(data: Record<string, unknown>): Array<[string, Record<string, unknown>]> {
-  const out: Array<[string, Record<string, unknown>]> = [];
-  for (const [k, v] of Object.entries(data)) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      out.push([k, v as Record<string, unknown>]);
-    }
-  }
-  return out;
-}
-
-function matchesFilters(entry: Record<string, unknown>, args: FindItemsArgs): boolean {
+function matchesFilters(entry: Entry, args: FindItemsArgs): boolean {
   if (args.internal_name && entry.InternalName !== args.internal_name) return false;
   if (args.internal_name_contains) {
     const n = String(entry.InternalName ?? '').toLowerCase();
@@ -162,10 +128,4 @@ function matchesFilters(entry: Record<string, unknown>, args: FindItemsArgs): bo
     if (args.value_max !== undefined && v > args.value_max) return false;
   }
   return true;
-}
-
-function projectFields(entry: Record<string, unknown>, fields: string[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const f of fields) if (f in entry) out[f] = entry[f];
-  return out;
 }

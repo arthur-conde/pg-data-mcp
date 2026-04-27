@@ -24,6 +24,8 @@ function primeManager(items: Record<string, unknown>): SourceManager {
     source: 'items',
     url: 'http://test/items.json',
     fetchedAt: new Date(0),
+    etag: null,
+    lastModified: null,
     data: items,
   });
   // Pin the resolved version too so resolveVersion() doesn't try to detect.
