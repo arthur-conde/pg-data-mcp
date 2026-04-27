@@ -16,8 +16,13 @@
     "watch": "tsc --watch",
     "start": "node dist/src/server.js",
     "test": "tsc && node --test --test-reporter=spec dist/test/**/*.test.js",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepare": "tsc"
   },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.20.2",
     "undici": "7.20.0",
