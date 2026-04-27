@@ -1,0 +1,59 @@
+import { describe, it } from 'node:test';
+import * as assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const serverEntry = path.resolve(here, '..', '..', 'src', 'server.js');
+
+interface JsonRpcResponse { id: number; result?: unknown; error?: unknown }
+
+/**
+ * Boots the server as a real subprocess, sends initialize + tools/list,
+ * collects responses, then closes stdin so it exits cleanly. Pins the
+ * stdio handshake and the v0.1 tool surface.
+ */
+async function rpc(messages: object[]): Promise<JsonRpcResponse[]> {
+  const child = spawn(process.execPath, [serverEntry], {
+    env: { ...process.env, PG_DATA_FALLBACK_VERSION: 'v0test', PG_DATA_FETCH_TIMEOUT_MS: '250' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const responses: JsonRpcResponse[] = [];
+  let buffer = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
+    let nl = buffer.indexOf('\n');
+    while (nl >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (line.length > 0) {
+        try { responses.push(JSON.parse(line) as JsonRpcResponse); } catch { /* ignore non-frame lines */ }
+      }
+      nl = buffer.indexOf('\n');
+    }
+  });
+  for (const m of messages) child.stdin.write(JSON.stringify(m) + '\n');
+  // Give the server a moment to flush before closing stdin.
+  await new Promise((r) => setTimeout(r, 250));
+  child.stdin.end();
+  await new Promise((r) => child.once('exit', r));
+  return responses;
+}
+
+describe('server stdio handshake', () => {
+  it('completes initialize and lists the v0.1 tools', async () => {
+    const out = await rpc([
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+    ]);
+
+    const init = out.find((r) => r.id === 1);
+    assert.ok(init, 'initialize response missing');
+    const list = out.find((r) => r.id === 2);
+    assert.ok(list, 'tools/list response missing');
+    const tools = (list!.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name).sort();
+    assert.deepEqual(tools, ['cdn_version', 'find_items', 'get_source', 'list_sources', 'resolve_strings']);
+  });
+});
