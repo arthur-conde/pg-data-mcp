@@ -71,6 +71,7 @@ describe('server stdio handshake', () => {
       'recipes_for_item',
       'refresh',
       'resolve_strings',
+      'server_info',
     ]);
   });
 });

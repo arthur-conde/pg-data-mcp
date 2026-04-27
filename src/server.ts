@@ -25,11 +25,17 @@ import { RecipesForItemInput, runRecipesForItem } from './tools/recipes-for-item
 import { AbilitiesForSkillInput, runAbilitiesForSkill } from './tools/abilities-for-skill.js';
 import { QuestsInAreaInput, runQuestsInArea } from './tools/quests-in-area.js';
 import { RefreshInput, runRefresh } from './tools/refresh.js';
-
-const SERVER_NAME = 'pg-data';
-const SERVER_VERSION = '0.3.0';
+import { ServerInfoInput, runServerInfo } from './tools/server-info.js';
+import { SERVER_NAME, SERVER_VERSION } from './version.js';
 
 const TOOLS = [
+  {
+    name: 'server_info',
+    description:
+      'Returns the pg-data-mcp package version and the current reference-data (CDN) version, ' +
+      'with a flag for whether the version was detected from the CDN or fell back to the configured default.',
+    inputSchema: zodToJsonSchema(ServerInfoInput),
+  },
   {
     name: 'cdn_version',
     description:
@@ -157,6 +163,10 @@ async function main(): Promise<void> {
     const { name, arguments: rawArgs } = req.params;
     try {
       switch (name) {
+        case 'server_info': {
+          const args = ServerInfoInput.parse(rawArgs ?? {});
+          return contentJson(await runServerInfo(args, manager));
+        }
         case 'cdn_version': {
           const args = CdnVersionInput.parse(rawArgs ?? {});
           return contentJson(await runCdnVersion(args, manager));
