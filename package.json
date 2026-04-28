@@ -1,6 +1,6 @@
 {
   "name": "pg-data-mcp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "MCP server exposing Project Gorgon reference data (items, recipes, NPCs, effects, strings) fetched live from cdn.projectgorgon.com.",
   "type": "module",
