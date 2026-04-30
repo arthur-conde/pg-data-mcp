@@ -18,6 +18,37 @@ import { FindNpcsInput, runFindNpcs } from './tools/find-npcs.js';
 import { FindEffectsInput, runFindEffects } from './tools/find-effects.js';
 import { FindQuestsInput, runFindQuests } from './tools/find-quests.js';
 import { FindAbilitiesInput, runFindAbilities } from './tools/find-abilities.js';
+import {
+  FindAbilitydynamicdotsInput,
+  runFindAbilitydynamicdots,
+} from './tools/find-abilitydynamicdots.js';
+import {
+  FindAbilitydynamicspecialvaluesInput,
+  runFindAbilitydynamicspecialvalues,
+} from './tools/find-abilitydynamicspecialvalues.js';
+import { FindAbilitykeywordsInput, runFindAbilitykeywords } from './tools/find-abilitykeywords.js';
+import { FindAiInput, runFindAi } from './tools/find-ai.js';
+import { FindAreasInput, runFindAreas } from './tools/find-areas.js';
+import { FindAttributesInput, runFindAttributes } from './tools/find-attributes.js';
+import { FindDirectedgoalsInput, runFindDirectedgoals } from './tools/find-directedgoals.js';
+import { FindItemsRawInput, runFindItemsRaw } from './tools/find-items-raw.js';
+import { FindItemusesInput, runFindItemuses } from './tools/find-itemuses.js';
+import { FindLandmarksInput, runFindLandmarks } from './tools/find-landmarks.js';
+import { FindLorebookinfoInput, runFindLorebookinfo } from './tools/find-lorebookinfo.js';
+import { FindLorebooksInput, runFindLorebooks } from './tools/find-lorebooks.js';
+import { FindPlayertitlesInput, runFindPlayertitles } from './tools/find-playertitles.js';
+import {
+  FindSourcesAbilitiesInput,
+  runFindSourcesAbilities,
+} from './tools/find-sources-abilities.js';
+import {
+  FindSourcesRecipesInput,
+  runFindSourcesRecipes,
+} from './tools/find-sources-recipes.js';
+import { FindStoragevaultsInput, runFindStoragevaults } from './tools/find-storagevaults.js';
+import { FindTsysclientinfoInput, runFindTsysclientinfo } from './tools/find-tsysclientinfo.js';
+import { FindTsysprofilesInput, runFindTsysprofiles } from './tools/find-tsysprofiles.js';
+import { FindXptablesInput, runFindXptables } from './tools/find-xptables.js';
 import { ListKeysInput, runListKeys } from './tools/list-keys.js';
 import { ResolveStringsInput, runResolveStrings } from './tools/resolve-strings.js';
 import { ItemSourcesInput, runItemSources } from './tools/item-sources.js';
@@ -105,6 +136,133 @@ const TOOLS = [
       'Filter abilities by Skill, level range, or Keyword. Use abilities_for_skill if you want a ' +
       'skill-scoped ability list joined with the skill record + advancement table.',
     inputSchema: zodToJsonSchema(FindAbilitiesInput),
+  },
+  {
+    name: 'find_abilitydynamicdots',
+    description:
+      'Filter ability dynamic-DoT records by DamageType, ReqActiveSkill, ReqAbilityKeywords, ' +
+      'ReqEffectKeywords, or numeric ranges on DamagePerTick / Duration / NumTicks.',
+    inputSchema: zodToJsonSchema(FindAbilitydynamicdotsInput),
+  },
+  {
+    name: 'find_abilitydynamicspecialvalues',
+    description:
+      'Filter ability dynamic-special-value rows by Label (exact / contains) or by ' +
+      'ReqAbilityKeywords / ReqEffectKeywords array membership.',
+    inputSchema: zodToJsonSchema(FindAbilitydynamicspecialvaluesInput),
+  },
+  {
+    name: 'find_abilitykeywords',
+    description:
+      'Substring search across the AttributesThatDeltaCritChance / AttributesThatModCritDamage / ' +
+      'MustHaveAbilityKeywords arrays in abilitykeywords.json.',
+    inputSchema: zodToJsonSchema(FindAbilitykeywordsInput),
+  },
+  {
+    name: 'find_ai',
+    description:
+      'Filter AI definitions by MobilityType, UncontrolledPet flag, or substring on the keys of ' +
+      'the entry Abilities map.',
+    inputSchema: zodToJsonSchema(FindAiInput),
+  },
+  {
+    name: 'find_areas',
+    description:
+      'Filter area definitions by FriendlyName / ShortFriendlyName (exact or case-insensitive ' +
+      'substring).',
+    inputSchema: zodToJsonSchema(FindAreasInput),
+  },
+  {
+    name: 'find_attributes',
+    description:
+      "Filter attributes.json rows by Label (exact or case-insensitive substring).",
+    inputSchema: zodToJsonSchema(FindAttributesInput),
+  },
+  {
+    name: 'find_directedgoals',
+    description:
+      'Filter directed-goal records by Label, Zone, or IsCategoryGate flag (exact or substring ' +
+      'where applicable).',
+    inputSchema: zodToJsonSchema(FindDirectedgoalsInput),
+  },
+  {
+    name: 'find_items_raw',
+    description:
+      'Filter the un-merged items_raw.json (per-entry fields only — no parent inheritance). For ' +
+      'resolved item values, prefer find_items, which works against the merged items.json.',
+    inputSchema: zodToJsonSchema(FindItemsRawInput),
+  },
+  {
+    name: 'find_itemuses',
+    description:
+      'Filter itemuses.json entries by recipe_id (matched against entry.RecipesThatUseItem).',
+    inputSchema: zodToJsonSchema(FindItemusesInput),
+  },
+  {
+    name: 'find_landmarks',
+    description:
+      'Filter landmarks (per-area arrays in landmarks.json) by Name, Description substring, or ' +
+      'Type. Result keys are synthesised as "<areaKey>__<index>" because one source key holds ' +
+      'multiple landmark records.',
+    inputSchema: zodToJsonSchema(FindLandmarksInput),
+  },
+  {
+    name: 'find_lorebookinfo',
+    description:
+      'Filter the Categories map in lorebookinfo.json by Title (exact / contains) or SubTitle ' +
+      'substring.',
+    inputSchema: zodToJsonSchema(FindLorebookinfoInput),
+  },
+  {
+    name: 'find_lorebooks',
+    description:
+      'Filter lorebook entries by Title, InternalName, Category, or Keywords substring.',
+    inputSchema: zodToJsonSchema(FindLorebooksInput),
+  },
+  {
+    name: 'find_playertitles',
+    description:
+      'Filter playertitles.json by Title (exact or case-insensitive substring).',
+    inputSchema: zodToJsonSchema(FindPlayertitlesInput),
+  },
+  {
+    name: 'find_sources_abilities',
+    description:
+      'Searches the raw sources_abilities.json table by inner skill / type. For ability records ' +
+      'themselves use find_abilities.',
+    inputSchema: zodToJsonSchema(FindSourcesAbilitiesInput),
+  },
+  {
+    name: 'find_sources_recipes',
+    description:
+      'Searches the raw sources_recipes.json table by inner npc / type. For the joined "where do ' +
+      'I learn this recipe" view, use recipes_for_item or item_sources.',
+    inputSchema: zodToJsonSchema(FindSourcesRecipesInput),
+  },
+  {
+    name: 'find_storagevaults',
+    description:
+      'Filter storagevaults.json by NpcFriendlyName, Area, or Grouping (each supports exact and ' +
+      'case-insensitive substring).',
+    inputSchema: zodToJsonSchema(FindStoragevaultsInput),
+  },
+  {
+    name: 'find_tsysclientinfo',
+    description:
+      'Filter tsysclientinfo.json by InternalName or Skill (exact and case-insensitive substring).',
+    inputSchema: zodToJsonSchema(FindTsysclientinfoInput),
+  },
+  {
+    name: 'find_tsysprofiles',
+    description:
+      'Substring search over the effect strings inside each tsysprofiles.json entry.',
+    inputSchema: zodToJsonSchema(FindTsysprofilesInput),
+  },
+  {
+    name: 'find_xptables',
+    description:
+      'Filter xptables.json by InternalName (exact or case-insensitive substring).',
+    inputSchema: zodToJsonSchema(FindXptablesInput),
   },
   {
     name: 'item_sources',
@@ -207,6 +365,82 @@ async function main(): Promise<void> {
           const args = FindAbilitiesInput.parse(rawArgs ?? {});
           return contentJson(await runFindAbilities(args, manager));
         }
+        case 'find_abilitydynamicdots': {
+          const args = FindAbilitydynamicdotsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAbilitydynamicdots(args, manager));
+        }
+        case 'find_abilitydynamicspecialvalues': {
+          const args = FindAbilitydynamicspecialvaluesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAbilitydynamicspecialvalues(args, manager));
+        }
+        case 'find_abilitykeywords': {
+          const args = FindAbilitykeywordsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAbilitykeywords(args, manager));
+        }
+        case 'find_ai': {
+          const args = FindAiInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAi(args, manager));
+        }
+        case 'find_areas': {
+          const args = FindAreasInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAreas(args, manager));
+        }
+        case 'find_attributes': {
+          const args = FindAttributesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindAttributes(args, manager));
+        }
+        case 'find_directedgoals': {
+          const args = FindDirectedgoalsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindDirectedgoals(args, manager));
+        }
+        case 'find_items_raw': {
+          const args = FindItemsRawInput.parse(rawArgs ?? {});
+          return contentJson(await runFindItemsRaw(args, manager));
+        }
+        case 'find_itemuses': {
+          const args = FindItemusesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindItemuses(args, manager));
+        }
+        case 'find_landmarks': {
+          const args = FindLandmarksInput.parse(rawArgs ?? {});
+          return contentJson(await runFindLandmarks(args, manager));
+        }
+        case 'find_lorebookinfo': {
+          const args = FindLorebookinfoInput.parse(rawArgs ?? {});
+          return contentJson(await runFindLorebookinfo(args, manager));
+        }
+        case 'find_lorebooks': {
+          const args = FindLorebooksInput.parse(rawArgs ?? {});
+          return contentJson(await runFindLorebooks(args, manager));
+        }
+        case 'find_playertitles': {
+          const args = FindPlayertitlesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindPlayertitles(args, manager));
+        }
+        case 'find_sources_abilities': {
+          const args = FindSourcesAbilitiesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindSourcesAbilities(args, manager));
+        }
+        case 'find_sources_recipes': {
+          const args = FindSourcesRecipesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindSourcesRecipes(args, manager));
+        }
+        case 'find_storagevaults': {
+          const args = FindStoragevaultsInput.parse(rawArgs ?? {});
+          return contentJson(await runFindStoragevaults(args, manager));
+        }
+        case 'find_tsysclientinfo': {
+          const args = FindTsysclientinfoInput.parse(rawArgs ?? {});
+          return contentJson(await runFindTsysclientinfo(args, manager));
+        }
+        case 'find_tsysprofiles': {
+          const args = FindTsysprofilesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindTsysprofiles(args, manager));
+        }
+        case 'find_xptables': {
+          const args = FindXptablesInput.parse(rawArgs ?? {});
+          return contentJson(await runFindXptables(args, manager));
+        }
         case 'item_sources': {
           const args = ItemSourcesInput.parse(rawArgs ?? {});
           return contentJson(await runItemSources(args, manager));
@@ -257,9 +491,13 @@ function errorResult(message: string) {
  * Minimal Zod -> JSON Schema bridge — same shim as MithrilLogMcp uses. The
  * real validation happens in zod at call time; this is just the description
  * the MCP client sees.
+ *
+ * Output conforms to JSON Schema draft-2020-12: the top-level schema carries
+ * `$schema`, and `ZodTuple` lowers to `prefixItems` (the 2020-12 replacement
+ * for the legacy tuple-shaped `items`).
  */
 function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return describe(schema);
+  return { $schema: 'https://json-schema.org/draft/2020-12/schema', ...describe(schema) };
 }
 
 function describe(schema: z.ZodType): Record<string, unknown> {
