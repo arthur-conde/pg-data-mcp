@@ -58,11 +58,30 @@ describe('server stdio handshake', () => {
       'abilities_for_skill',
       'cdn_version',
       'find_abilities',
+      'find_abilitydynamicdots',
+      'find_abilitydynamicspecialvalues',
+      'find_abilitykeywords',
+      'find_ai',
+      'find_areas',
+      'find_attributes',
+      'find_directedgoals',
       'find_effects',
       'find_items',
+      'find_items_raw',
+      'find_itemuses',
+      'find_landmarks',
+      'find_lorebookinfo',
+      'find_lorebooks',
       'find_npcs',
+      'find_playertitles',
       'find_quests',
       'find_recipes',
+      'find_sources_abilities',
+      'find_sources_recipes',
+      'find_storagevaults',
+      'find_tsysclientinfo',
+      'find_tsysprofiles',
+      'find_xptables',
       'get_source',
       'item_sources',
       'list_keys',
@@ -73,5 +92,22 @@ describe('server stdio handshake', () => {
       'resolve_strings',
       'server_info',
     ]);
+  });
+
+  it('every tool inputSchema declares draft-2020-12', async () => {
+    const out = await rpc([
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+    ]);
+    const list = out.find((r) => r.id === 2);
+    const tools = (list!.result as { tools: Array<{ name: string; inputSchema: Record<string, unknown> }> }).tools;
+    for (const t of tools) {
+      assert.equal(
+        t.inputSchema['$schema'],
+        'https://json-schema.org/draft/2020-12/schema',
+        `tool ${t.name} missing draft-2020-12 $schema`,
+      );
+    }
   });
 });
